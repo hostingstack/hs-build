@@ -1,15 +1,18 @@
 [DEFAULT]
 lib=
-    checkout_hs () {
-        git clone --recursive git://github.com/hostingstack/$1.git $MR_REPO
-    }
-    build () {
-	echo ""
-	echo "*** BUILDING $MR_REPO ***"
-	echo ""
-        cd $MR_REPO &&
-        pdebuild --configfile /etc/pbuilder/hsrc --buildresult ..
-    }
+   checkout_hs () {
+     git clone --recursive git://github.com/hostingstack/$1.git $MR_REPO
+   }
+   build () {
+     cd $MR_REPO
+     if [ -d debian ]; then
+       echo ""
+       echo "*** BUILDING $MR_REPO ***"
+       echo ""
+       echo ""
+       pdebuild --configfile /etc/pbuilder/hsrc --buildresult ..
+     fi
+   }
 
 [src/thrift]
 checkout = checkout_hs thrift && cd $MR_REPO && git checkout hs
