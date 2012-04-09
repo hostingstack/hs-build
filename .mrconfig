@@ -1,0 +1,44 @@
+[DEFAULT]
+lib=
+    checkout_efc () {
+        git clone --recursive git@github.com:efficientcloud/$1.git $MR_REPO
+    }
+    checkout_hs () {
+        git clone --recursive git://github.com:hostingstack/$1.git $MR_REPO
+    }
+    build () {
+	echo ""
+	echo "*** BUILDING $MR_REPO ***"
+	echo ""
+        cd $MR_REPO &&
+        pdebuild --configfile /etc/pbuilder/hsrc --buildresult ..
+    }
+
+[src/thrift]
+checkout = checkout_efc thrift && cd $MR_REPO && git checkout hs
+
+[src/hs-agent]
+checkout = checkout_efc agent
+
+[src/hs-cloudcontroller]
+checkout = checkout_efc cloudcontroller
+
+[src/hs-envroot-factory]
+checkout = checkout_efc envroot-factory
+
+[src/hs-usercontrolpanel]
+checkout = checkout_efc usercontrolpanel
+
+[src/hs-sshgateway]
+checkout = checkout_efc sshgateway
+
+[src/hs-nginx]
+checkout = checkout_efc nginx-debian
+
+[src/hs-deploytool]
+checkout = checkout_efc deploytool
+
+[src/hs-screenshotservice]
+checkout = checkout_efc screenshotservice
+
+
