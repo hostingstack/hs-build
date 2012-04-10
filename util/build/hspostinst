@@ -1,0 +1,109 @@
+#!/bin/bash
+echo HostingStack postinst starting
+echo Installing postgresql
+apt-get install -y postgresql postgresql-9.1
+echo Installing HostingStack packages
+PACKAGES=$(cat /root/packages/list)
+DEBIAN_FRONTEND=noninteractive apt-get install --allow-unauthenticated -y $PACKAGES
+rm -f /etc/apt/sources.list.d/hslocal.list
+
+echo Services configuration ...
+echo PG
+echo 'host  all   all   0.0.0.0/0   md5' >> /etc/postgresql/9.1/main/pg_hba.conf
+echo "listen_addresses = '*'" >> /etc/postgresql/9.1/main/postgresql.conf
+invoke-rc.d postgresql restart
+
+echo MySQL
+grep -v 'bind-address' /etc/mysql/my.cnf > /tmp/my.cnf
+cp /tmp/my.cnf /etc/mysql/my.cnf; rm /tmp/my.cnf
+invoke-rc.d mysql restart
+
+echo Monit
+cat <<EOCONF >/etc/monit/monitrc
+set daemon 10
+set logfile syslog facility log_daemon
+set httpd port 2812
+        allow admin:monit
+
+include /var/lib/hs/monit
+EOCONF
+invoke-rc.d monit restart
+
+echo Memcached
+invoke-rc.d memcached stop
+sed -i 's/ENABLE_MEMCACHED=yes/ENABLE_MEMCACHED=no/' /etc/default/memcached
+
+echo HostingStack shared
+cat <<EOCONF >/etc/hs/shared/hs.yml
+production:
+  cc_api_host: http://localhost:9000
+  codemanager_host : http://localhost:9200
+  cc_api_user: CCUSER
+  cc_api_password: CCCHANGEME
+  billing_api_user: BILLINGUSER
+  billing_api_password: BILLINGCHANGEME
+  agent_api_user: AGENTUSER
+  agent_api_password: AGENTCHANGEME
+  redis: 127.0.0.1:6379
+EOCONF
+
+echo HostingStack ERF
+cat <<EOCONF >>/etc/hs/envroot-factory/production.rb
+host_ip = %x{ip route get 4.4.4.4}.chomp.split[6]
+\$config[:apt_sources] = <<EOSOURCES
+deb http://#{host_ip}:3142/cdn.debian.net/debian squeeze main non-free contrib
+deb http://#{host_ip}:3142/cdn.debian.net/debian squeeze-updates main non-free contrib
+deb http://#{host_ip}:3142/security.debian.org/ squeeze/updates main non-free contrib
+EOSOURCES
+EOCONF
+
+echo Debian nginx
+export RAILS_ENV=production
+find /srv/hs-archive -type d -print0 | xargs -0 chown www-data:adm
+rm -f /etc/nginx/sites-enabled/default
+/etc/init.d/nginx restart
+
+echo Enable envroot-factory workers
+update-service -a /usr/lib/hs/envroot-factory/services/hs-envroot-factory-1
+update-service -a /usr/lib/hs/envroot-factory/services/hs-envroot-factory-2
+update-service -a /usr/lib/hs/envroot-factory/services/hs-envroot-factory-3
+update-service -a /usr/lib/hs/envroot-factory/services/hs-envroot-factory-4
+update-service -a /usr/lib/hs/envroot-factory/services/hs-envroot-factory-5
+
+echo HostingStack CloudController DB Setup
+HOST_IP=$(ip route get 4.4.4.4 | awk '/src/{print $7}')
+su - postgres -c "echo UPDATE servers SET name=\'$(hostname -s)\', internal_ip=\'$HOST_IP\', external_ip=\'$HOST_IP\' WHERE name=\'host\' | psql hscloudcontroller"
+echo enable CC workers
+update-service -a /usr/lib/hs/cloudcontroller/services/hs-cloudcontroller-ruote-worker
+update-service -a /usr/lib/hs/cloudcontroller/services/hs-cloudcontroller-rrs-worker
+update-service -a /usr/lib/hs/cloudcontroller/services/hs-cloudcontroller-task-worker
+update-service -a /usr/lib/hs/cloudcontroller/services/hs-cloudcontroller-http
+
+echo HostingStack UCP
+update-service -a /usr/lib/hs/usercontrolpanel/services/hs-usercontrolpanel-http
+
+echo Create user for postgres service agent
+su postgres -c "echo CREATE USER hs_service_pg ENCRYPTED PASSWORD \'CHANGEME\' SUPERUSER | psql"
+echo Create user for mysql service agent
+echo "CREATE USER 'hs_svc'@'localhost' IDENTIFIED BY 'CHANGEME'; GRANT ALL PRIVILEGES ON *.* TO 'hs_svc'@'localhost' WITH GRANT OPTION;" | mysql --defaults-file=/etc/mysql/debian.cnf
+echo HostingStack Agent
+update-service -a /usr/lib/hs/agent/services/hs-agent-main
+update-service -a /usr/lib/hs/agent/services/hs-agent-worker
+
+echo HostingStack ssh-gateway
+update-service -a /usr/lib/hs/sshgateway/services/hs-sshgateway
+
+echo HostingStack http-gateway
+#echo Configure correct ssl certificates
+#sed -i -e 's/ssl_certificate .*/ssl_certificate \/etc\/ssl\/private\/wildcard.solidrails.net.pem;/' /etc/hs/httpgateway/hs-httpgateway.conf
+#sed -i -e 's/ssl_certificate_key .*/ssl_certificate_key \/etc\/ssl\/private\/wildcard.solidrails.net.key;/' /etc/hs/httpgateway/hs-httpgateway.conf
+# remove comments from https block (quick'n'dirty'n'goingtofail)
+#sed -i -e 's/^#//g' /etc/hs/httpgateway/hs-httpgateway.conf
+echo Create empty key-material tcb
+tcbmgr create /var/lib/hs/cloud.tcb
+tcbmgr create /var/lib/hs/key_material.tcb
+/etc/init.d/hs-httpgateway restart
+
+echo hspostinst done
+mv /var/hspostinst /var/hspostinst.done
+

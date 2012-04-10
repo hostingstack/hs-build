@@ -1,0 +1,118 @@
+#!/usr/bin/env ruby
+require 'fileutils'
+require 'getoptlong'
+
+class Builder
+  def initialize
+    @basepath = File.expand_path('../', __FILE__)
+    @vmformat = 'raw'
+    @mirror = 'http://cdn.debian.net/debian'
+    @vzver = "042stab053.5"
+    @outfile = nil
+  end
+
+  def usage
+    puts <<-EOF
+build-vm [OPTION] ... FILE
+
+-h, --help             Show this help
+--format [format]      Select VM disk format (raw [def], qcow2, vmdk)
+--mirror [url]         Debian mirror to use
+                         (def: #{@mirror})
+
+FILE: output filename
+EOF
+  end
+
+  def run
+    opts = GetoptLong.new(
+                          [ '--help', '-h',   GetoptLong::NO_ARGUMENT       ],
+                          [ '--format',       GetoptLong::REQUIRED_ARGUMENT ],
+                          [ '--mirror',       GetoptLong::REQUIRED_ARGUMENT ],
+                          )
+
+    opts.each do |opt, arg|
+      case opt
+      when '--help'
+        usage
+        exit 0
+      when '--format'
+        @vmformat = arg
+      when '--mirror'
+        @mirror = arg
+      end
+    end
+
+    outfile = ARGV.shift
+    if outfile.nil? || outfile.empty?
+      usage
+      exit 1
+    end
+    @outfile = File.expand_path(outfile)
+
+    puts "HostingStack/hs-build build-vm"
+    puts " * Using basepath \"#{@basepath}\""
+    puts " * Writing VM image to \"#{@outfile}\""
+
+    prepare_kernels
+    build_vm
+
+    puts " * Done."
+  end
+
+  def system(cmdline)
+    Kernel.system(cmdline)
+    raise "Command \"#{cmdline}\" failed with error code #{$?.exitstatus}" unless $?.exitstatus == 0
+  end
+
+  def prepare_kernels
+    kernels = File.join(@basepath, 'tmp/kernels')
+    puts " * Preparing OpenVZ Kernels ..."
+    FileUtils.mkdir_p kernels
+    def download_vzkernel(path, rpm)
+      return if File.exist?(File.join(path, rpm))
+      system "cd \"#{path}\" && wget http://download.openvz.org/kernel/branches/rhel6-2.6.32/#{@vzver}/#{rpm}"
+    end
+    def make_vzkernel(path, rpm, deb)
+      return if File.exist?(File.join(path, deb))
+      download_vzkernel path, rpm
+      system "cd \"#{path}\" && fakeroot alien -k -d #{rpm}"
+    end
+    make_vzkernel kernels, "vzkernel-2.6.32-#{@vzver}.x86_64.rpm", "vzkernel_2.6.32-#{@vzver}_amd64.deb"
+    make_vzkernel kernels, "vzkernel-devel-2.6.32-#{@vzver}.x86_64.rpm", "vzkernel-devel_2.6.32-#{@vzver}_amd64.deb"
+  end
+
+  def build_vm
+    post_scripts = File.join(@basepath, 'util/build/post-scripts')
+    packages = File.join(@basepath, 'util/build/packages')
+    puts " * Building VM image ..."
+    vmfile = @outfile
+    if @vmformat != 'raw'
+      vmfile = vmfile + '.tmp'
+    end
+
+    cmdline = "sudo HS_BASEPATH=\"#{@basepath}\" grml-debootstrap --vmfile "
+    cmdline << " -r wheezy --arch amd64 --filesystem ext3 --force"
+    cmdline << " --vmsize 4G --hostname demo --password CHANGEME"
+    cmdline << " -t #{vmfile}"
+    cmdline << " --mirror #{@mirror}"
+    cmdline << " --scripts #{post_scripts}"
+    cmdline << " --packages #{packages}"
+    puts "   * Running \"#{cmdline}\" ..."
+    system(cmdline)
+
+    if @vmformat != 'raw'
+      puts "   * Converting to format #{@vmformat} ..."
+      system("qemu-img convert -p -f raw -O #{@vmformat} #{vmfile} #{@outfile}")
+      File.unlink vmfile
+    end
+  end
+end
+
+begin
+  Builder.new.run
+rescue => e
+  puts e
+  exit 1
+end
+exit 0

@@ -5,7 +5,7 @@ set -e
 BASEDIR=$(readlink -f .)
 
 echo " * Installing packages..."
-sudo apt-get install -y pbuilder mr bundler ruby1.9.1-full
+sudo apt-get install -y pbuilder mr bundler ruby1.9.1-full grml-debootstrap build-essential alien fakeroot wget
 
 echo " * Setting up pbuilder..."
 cat <<EOF | sudo tee /etc/pbuilder/hsrc

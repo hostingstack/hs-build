@@ -1,0 +1,91 @@
+#!/bin/bash
+set -e
+if [ -z "$MNTPOINT" ] ; then
+  echo "Please run $0 inside grml-debootstrap or export MNTPOINT" >&2
+  exit 1
+fi
+if [ -z "$HS_BASEPATH" ]; then
+  echo "Please run $0 inside build-vm or export HS_BASEPATH" >&2
+  exit 1
+fi
+
+echo " * Copying Application Templates ..."
+mkdir -p "$MNTPOINT"/srv/hs-archive/storage/template/
+cp -v "$HS_BASEPATH"/src/app-templates/*.zip "$MNTPOINT"/srv/hs-archive/storage/template/
+mkdir -p "$MNTPOINT"/mnt/shared-data/
+
+mkdir -p "$MNTPOINT"/root/packages
+pushd "$MNTPOINT"/root/packages
+
+echo " * Copying HostingStack packages ..."
+cp -v "$HS_BASEPATH"/src/*.deb "$MNTPOINT"/root/packages/
+echo " * Copying Kernels ..."
+cp -v "$HS_BASEPATH"/tmp/kernels/*.deb "$MNTPOINT"/root/packages/
+
+chroot "$MNTPOINT" bash -c "cd /root/packages/ && apt-ftparchive packages ." > "$MNTPOINT"/root/packages/Packages
+echo "deb file:///root/packages/ ./" >> "$MNTPOINT"/etc/apt/sources.list.d/hslocal.list
+chroot "$MNTPOINT" apt-get update
+
+echo " * Installing OpenVZ Kernels ..."
+chroot "$MNTPOINT" apt-get install --allow-unauthenticated vzkernel vzkernel-devel
+KVERS=$(basename "$MNTPOINT"/boot/symvers-* .gz | sed -e 's/symvers-//')
+chroot "$MNTPOINT" update-initramfs -c -k ${KVERS}
+
+# sigh
+rm -f "$MNTPOINT"/var/lib/dpkg/info/linux-image-*.prerm
+chmod -x "$MNTPOINT"/etc/kernel/postrm.d/zz-update-grub
+chroot "$MNTPOINT" apt-get remove --purge -y linux-image\*
+chmod +x "$MNTPOINT"/etc/kernel/postrm.d/zz-update-grub
+
+echo " * Caching HostingStack packages for install after reboot ..."
+PACKAGES=$(grep 'Package: hs-' "$MNTPOINT"/root/packages/Packages | awk '{print $2}' | tr '\n' ' ')
+PACKAGES="postgresql $PACKAGES"
+chroot "$MNTPOINT" apt-get install -y -d --allow-unauthenticated $PACKAGES
+
+echo " * Installing hs-agent ..."
+chroot "$MNTPOINT" apt-get install -y --allow-unauthenticated hs-agent
+cat <<EOF > "$MNTPOINT"/etc/hs/agent/iptables-local.erb
+# Written by build-vm
+*filter
+-A net2fw-LOCAL -p tcp -m tcp --dport 22 -j ACCEPT -m comment --comment "SSH management"
+-A net2fw-LOCAL -p tcp -m tcp --dport 9000 -j ACCEPT -m comment --comment "Admin dashboard"
+-A net2fw-LOCAL -p tcp -m tcp --dport 9100 -j ACCEPT -m comment --comment "UCP"
+-A net2fw-HS -p tcp -m tcp --dport 2200 -j ACCEPT -m comment --comment "gateway: Allow SSH traffic to SSH gateway"
+COMMIT
+EOF
+
+popd
+
+sed -i 's/RAMTMP=yes/RAMTMP=no/' "$MNTPOINT"/etc/default/rcS
+sed -i '/\/sys/d' "$MNTPOINT"/etc/fstab
+
+cat <<EOF >> "$MNTPOINT"/etc/network/interfaces
+auto eth0
+iface eth0 inet dhcp
+EOF
+
+cat <<EOF > "$MNTPOINT"/etc/rc.local
+#!/bin/sh
+if [ -f /var/hspostinst ]; then
+  /var/hspostinst 2>&1 | tee -a /var/log/hspostinst.log
+fi
+
+HOST_IP=\$(ip route get 4.4.4.4 | awk '/src/{print \$7}')
+cat <<EOI > /etc/issue
+HostingStack Platform on \n -- Terminal \l
+Management: http://\$HOST_IP:9100/
+UCP:        http://\$HOST_IP:9000/
+EOI
+
+exit 0
+EOF
+
+echo "${PACKAGES}" > "$MNTPOINT"/root/packages/list
+cp "$HS_BASEPATH"/util/build/hspostinst "$MNTPOINT"/var/hspostinst
+chmod a+x "$MNTPOINT"/var/hspostinst
+
+echo "The new VM has these SSH Keys:"
+for key in "$MNTPOINT"/etc/ssh/ssh_host_*_key.pub ; do
+  chroot "$MNTPOINT" ssh-keygen -l -f ${key##$MNTPOINT}
+done
+echo "-----------------------------------------------------------------"

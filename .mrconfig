@@ -40,3 +40,6 @@ checkout = checkout_hs hs-sshgateway
 
 [src/hs-usercontrolpanel]
 checkout = checkout_hs hs-usercontrolpanel
+
+[src/app-templates]
+checkout = checkout_hs app-templates
