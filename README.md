@@ -4,7 +4,6 @@ HostingStack build scripts
 Base requirement: Debian wheezy, x86-64.
 Preferably as a fast machine, VM is okay. At least 10G+ FREE disk space.
 
-WARNING: At this time most of the repositories are not yet public.
 
 Preparations
 ------------
@@ -18,7 +17,8 @@ This will:
   * Install dependency packages
   * Configure pbuilder for building packages
   * Set up hs-build/.mrconfig as a trusted config (in ~/.mrtrust)
-  * Build shipped dependencies
+  * Check out the HostingStack source code to ./src
+  * Build shipped dependencies (Thrift)
 
 Building packages
 -----------------
