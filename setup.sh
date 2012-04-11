@@ -31,7 +31,7 @@ cd ${BASEDIR}/src && apt-ftparchive packages . > Packages && apt-get update
 EOF
 sudo chmod a+rx /etc/pbuilder/hs/hooks/D05pre
 
-mkdir src || true
+mkdir -p src
 echo -n>src/Packages
 sudo pbuilder --create --configfile /etc/pbuilder/hsrc
 
