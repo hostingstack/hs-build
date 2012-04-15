@@ -27,7 +27,6 @@ postgresql-client-9.1
 monit
 daemontools-run
 sqlite3
-squid3
 apt-cacher-ng
 mysql-server
 
@@ -43,7 +42,6 @@ perl
 wget
 dnsutils
 psmisc
-kexec-tools
 
 alien
 
