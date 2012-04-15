@@ -60,3 +60,5 @@ wamerican-huge
 python-minimal python python-support openssl ca-certificates dbconfig-common liberror-perl git-man git ssl-cert postgresql-common
 python-crypto python-openssl python-pam python-paramiko python-pkg-resources python-serial python-twisted-bin python-zope.interface
 python-twisted-core zip
+
+avahi-daemon
