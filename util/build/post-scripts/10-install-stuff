@@ -78,8 +78,12 @@ echo "${PACKAGES}" > "$MNTPOINT"/root/packages/list
 cp "$HS_BASEPATH"/util/build/hspostinst "$MNTPOINT"/var/hspostinst
 chmod a+x "$MNTPOINT"/var/hspostinst
 
-cp "$HS_BASEPATH"/util/build/hshostname "$MNTPOINT"/etc/init.d
+cp "$HS_BASEPATH"/util/build/hshostname "$MNTPOINT"/etc/init.d/
+chmod a+x "$MNTPOINT"/etc/init.d/hshostname
 chroot "$MNTPOINT" insserv hshostname
+
+cp "$HS_BASEPATH"/util/build/hsgitify "$MNTPOINT"/usr/local/bin/
+chmod a+x "$MNTPOINT"/usr/local/bin/hsgitify
 
 echo "The new VM has these SSH Keys:"
 for key in "$MNTPOINT"/etc/ssh/ssh_host_*_key.pub ; do
