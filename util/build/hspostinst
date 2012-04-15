@@ -61,7 +61,10 @@ echo Debian nginx
 export RAILS_ENV=production
 find /srv/hs-archive -type d -print0 | xargs -0 chown www-data:adm
 rm -f /etc/nginx/sites-enabled/default
-/etc/init.d/nginx restart
+invoke-rc.d nginx restart
+
+echo HostingStack Code Archive
+invoke-rc.d hs-archive restart
 
 echo Enable envroot-factory workers
 update-service -a /usr/lib/hs/envroot-factory/services/hs-envroot-factory-1
@@ -102,7 +105,7 @@ echo HostingStack http-gateway
 echo Create empty key-material tcb
 tcbmgr create /var/lib/hs/cloud.tcb
 tcbmgr create /var/lib/hs/key_material.tcb
-/etc/init.d/hs-httpgateway restart
+invoke-rc.d hs-httpgateway restart
 
 echo hspostinst done
 mv /var/hspostinst /var/hspostinst.done
