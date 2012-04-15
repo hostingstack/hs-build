@@ -93,7 +93,7 @@ EOF
 
     cmdline = "sudo HS_BASEPATH=\"#{@basepath}\" grml-debootstrap --vmfile "
     cmdline << " -r wheezy --arch amd64 --filesystem ext3 --force"
-    cmdline << " --vmsize 4G --hostname demo --password CHANGEME"
+    cmdline << " --vmsize 4G --hostname hsdemo --password CHANGEME"
     cmdline << " -t #{vmfile}"
     cmdline << " --mirror #{@mirror}"
     cmdline << " --scripts #{post_scripts}"
