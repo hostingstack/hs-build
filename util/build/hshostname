@@ -1,0 +1,48 @@
+#!/usr/bin/env ruby
+### BEGIN INIT INFO
+# Provides:          hshostname
+# Required-Start:    mountkernfs $local_fs networking
+# Required-Stop:     $local_fs
+# Default-Start:     S
+# Default-Stop:      0 6
+# Short-Description: Setup HostingStack hostname
+### END INIT INFO
+
+
+domain = "hostingstack.net"
+hostsfile = '/etc/hosts'
+hostnamefile = '/etc/hostname'
+
+hostname_old = File.read('/etc/hostname').strip
+ip = %x{ip route get 4.4.4.4 | awk '/src/{print $7}'}
+
+if ip.nil? or ip.empty? then
+  print "hshostname: no IP bound, not setting hostname..."
+  exit 1
+end
+
+hostname_new = ip.strip.split('.').map{|l| "%02x" % l }.join
+if hostname_old != hostname_new then
+  puts "Setting FQDN to #{hostname_new}.#{domain} ..."
+  data = File.read(hostsfile).split("\n").map {|l| l.match(/^127.0.0.1/) ? l = "127.0.0.1        #{hostname_new}.#{domain} #{hostname_new} localhost" : l }.join("\n")
+  File.open(hostsfile, "w") do |f|
+    f.write data + "\n"
+  end
+  File.open(hostnamefile, "w") do |f|
+    f.write hostname_new + "\n"
+  end
+  %x{/etc/init.d/hostname.sh start}
+
+  issue = <<EOF
+
+  HostingStack PaaS on \\n -- Terminal \\l
+
+  Management:   http://#{hostname_new}.#{domain}:9100/
+  UCP:          http://#{hostname_new}.#{domain}:9000/
+EOF
+  File.open("/etc/issue", "w") do |f|
+    f.write issue + "\n"
+  end
+
+end
+

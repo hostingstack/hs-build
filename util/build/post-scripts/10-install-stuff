@@ -70,19 +70,16 @@ if [ -f /var/hspostinst ]; then
   /var/hspostinst 2>&1 | tee -a /var/log/hspostinst.log
 fi
 
-HOST_IP=\$(ip route get 4.4.4.4 | awk '/src/{print \$7}')
-cat <<EOI > /etc/issue
-HostingStack Platform on \n -- Terminal \l
-Management: http://\$HOST_IP:9100/
-UCP:        http://\$HOST_IP:9000/
-EOI
-
 exit 0
 EOF
 
 echo "${PACKAGES}" > "$MNTPOINT"/root/packages/list
+
 cp "$HS_BASEPATH"/util/build/hspostinst "$MNTPOINT"/var/hspostinst
 chmod a+x "$MNTPOINT"/var/hspostinst
+
+cp "$HS_BASEPATH"/util/build/hshostname "$MNTPOINT"/etc/init.d
+chroot "$MNTPOINT" insserv hshostname
 
 echo "The new VM has these SSH Keys:"
 for key in "$MNTPOINT"/etc/ssh/ssh_host_*_key.pub ; do
